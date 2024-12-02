@@ -39,6 +39,7 @@ int pin3 = 16; //CHANGE
 int pin4 = 17; //CHANGE
 const int stepsPerRevolution = 2048;
 int tracker = 0;
+int begin = 0;
 //RTC
 char t[32];
 //LCD Screen
@@ -70,12 +71,6 @@ void setup() {
 
   count = millis(); //inital count value
 
-  //Testing Scripts
-/*digitalWrite(in1, HIGH); //DC motor test run (1s)
-  digitalWrite(in2, LOW);
-  digitalWrite(DCmotor, HIGH);
-  digitalWrite(DCmotor, LOW); */
-
   Wire.begin(); 
   rtc.begin();
   
@@ -94,11 +89,7 @@ void setup() {
   Serial.print(':');
   Serial.println(now.second(), DEC);
 
-  //Testing scripts
-  /* lcd.begin(16,2); //LCD columns and rows
-  lcd.setCursor(0,1); //Setcursor to 2nd row, 1st space
-  lcd.print("lcd ready"); //init. message
-  lcd.clear(); //Clear lcd for normal operation */
+  lcd.begin(16,2); //LCD columns and rows
 }
 
 void loop() {
@@ -106,14 +97,8 @@ void loop() {
     int chk = DHT.read11(DHT11_PIN);
     DateTime now = rtc.now();
     sprintf(t, "%02d:%02d:%02d", now.hour(), now.minute(), now.second());
-    Serial.print(F("Date/Time: ")); //prints "Date/Time: " to serial monitor 
     lcd.setCursor(0,0);
     lcd.write(t); //prints time to top left corner of lcd screen
-    Serial.println(t);
-    Serial.print("Temperature = "); //prints temp and humidity to serial monitor
-    Serial.println(DHT.temperature);
-    Serial.print("Humidity = ");
-    Serial.println(DHT.humidity);
 
     int temperature = DHT.temperature;
     int humidity = DHT.humidity;
@@ -150,6 +135,13 @@ void loop() {
     tracker = 0;
   }
 
+   if(begin == 1) {
+    lcd.setCursor(4,0); //reset lcd
+    lcd.print("        ");
+    state_trans();
+    begin = 0;
+  }
+  
   if(state == 1) { //IDLE STATE
     digitalWrite(GreenLED, HIGH); //CHANGE
     lcd.setCursor(12,0);
@@ -237,8 +229,8 @@ void pin_ISR() { //INTERRUPT for "START" button
   if(state == 0) {
     state = 1;
     digitalWrite(YellowLED, LOW); //turn off diabled light //CHANGE
-    lcd.clear(); //reset lcd
-    state_trans(); //run state transition function
+    digitalWrite(GreenLED, HIGH); //turn on IDLE light
+    begin = 1;
   }
 }
 
@@ -250,17 +242,20 @@ int state_trans() {
   int chk = DHT.read11(DHT11_PIN);
   DateTime now = rtc.now();
   sprintf(t, "%02d:%02d:%02d", now.hour(), now.minute(), now.second());
-  Serial.print(F("Date/Time: ")); //prints "Date/Time: " to serial monitor 
-  lcd.setCursor(0,0);
-  lcd.write(t); //prints time to top left corner of lcd screen
-  Serial.println(t);
-  if(state == 0) {
+  Serial.print(F("Date/Time: ")); //prints "Date/Time: " to serial monitor
+  Serial.print(t);
+  Serial.print(" ");
+  if(state == 0) { //Prints correct state to serial monitor
     Serial.println("STATE: DISABLED");
+    Serial.println("");
   } else if(state == 1) {
     Serial.println("STATE: IDLE");
+    Serial.println("");
   } else if(state == 2) {
-    Serial.println("STATE: RESET");
+    Serial.println("STATE: ERROR");
+    Serial.println("");
   } else if(state == 3) {
     Serial.println("STATE: RUNNING");
+    Serial.println("");
       }
 }
