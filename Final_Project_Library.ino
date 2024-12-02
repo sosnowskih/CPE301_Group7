@@ -261,6 +261,6 @@ int state_trans() {
   } else if(state == 2) {
     Serial.println("STATE: RESET");
   } else if(state == 3) {
-    Serial.println("STATE: RUNNING"):
+    Serial.println("STATE: RUNNING");
       }
 }
