@@ -38,6 +38,7 @@ int pin2 = 15; //CHANGE
 int pin3 = 16; //CHANGE
 int pin4 = 17; //CHANGE
 const int stepsPerRevolution = 2048;
+int tracker = 0;
 //RTC
 char t[32];
 //LCD Screen
@@ -69,11 +70,11 @@ void setup() {
 
   count = millis(); //inital count value
 
-  digitalWrite(in1, HIGH); //DC motor test run (1s)
+  //Testing Scripts
+/*digitalWrite(in1, HIGH); //DC motor test run (1s)
   digitalWrite(in2, LOW);
   digitalWrite(DCmotor, HIGH);
-  delay(1000); //CHANGE
-  digitalWrite(DCmotor, LOW);
+  digitalWrite(DCmotor, LOW); */
 
   Wire.begin(); 
   rtc.begin();
@@ -93,11 +94,11 @@ void setup() {
   Serial.print(':');
   Serial.println(now.second(), DEC);
 
-  lcd.begin(16,2); //LCD columns and rows
+  //Testing scripts
+  /* lcd.begin(16,2); //LCD columns and rows
   lcd.setCursor(0,1); //Setcursor to 2nd row, 1st space
   lcd.print("lcd ready"); //init. message
-  delay(1000); //stay on for 1s //CHANGE
-  lcd.clear(); //Clear lcd for normal operation
+  lcd.clear(); //Clear lcd for normal operation */
 }
 
 void loop() {
@@ -113,11 +114,11 @@ void loop() {
     Serial.println(DHT.temperature);
     Serial.print("Humidity = ");
     Serial.println(DHT.humidity);
-    lcd.setCursor(0,1);
 
     int temperature = DHT.temperature;
     int humidity = DHT.humidity;
 
+    lcd.setCursor(0,1);
     lcd.print(temperature); //prints temp and humidity to lcd screen
     lcd.setCursor(2,1);
     lcd.print("C");
@@ -132,6 +133,21 @@ void loop() {
   if((state != 0) && (digitalRead(ventButton) == 1)) { //Vent control loop //CHANGE
     myStepper.setSpeed(10); //speed set to 10 rpm
     myStepper.step(stepsPerRevolution/10); //rotate a tenth of a rotation every time
+    lcd.setCursor(5,1);
+    lcd.print("VENT");
+    if(tracker == 0) {
+      int chk = DHT.read11(DHT11_PIN);
+      DateTime now = rtc.now();
+      sprintf(t, "%02d:%02d:%02d", now.hour(), now.minute(), now.second());
+      Serial.print(F("Date/Time: ")); //prints "Date/Time: " to serial monitor 
+      Serial.println(t);
+      Serial.println("VENT CHANGE");
+      tracker++;
+    }
+  } else {
+    lcd.setCursor(5,1);
+    lcd.print("    ");
+    tracker = 0;
   }
 
   if(state == 1) { //IDLE STATE
@@ -145,6 +161,7 @@ void loop() {
       lcd.clear();
       lcd.setCursor(9,0);
       lcd.print("RUNNING"); //print state to lcd screen
+      state_trans(); //run state transition code
     } else if(water_Level() < 100) { //if the water is too low, throw an error
       state = 2;
       digitalWrite(GreenLED, LOW); //CHANGE
@@ -152,12 +169,13 @@ void loop() {
       lcd.clear();
       lcd.setCursor(11,0);
       lcd.print("ERROR"); //print state to lcd screen
-
+      state_trans(); //run state transition code
     } else if(digitalRead(Stop) == 1) { //if "stop" is pressed, disable system //CHANGE
       state = 0;
       digitalWrite(GreenLED, LOW); //CHANGE
       digitalWrite(YellowLED, HIGH); //adjust to "stop" lights //CHANGE
       lcd.clear();
+      state_trans(); //run state transition code
     }
 
   } else if(state == 2) { //ERROR STATE
@@ -168,6 +186,7 @@ void loop() {
       lcd.clear();
       lcd.setCursor(12,0);
       lcd.print("IDLE"); //print "IDLE" to top right corner of lcd
+      state_trans(); //run state transition code
     } else { //otherwise, run error as normal
       digitalWrite(RedLED, HIGH); //CHANGE
       lcd.setCursor(11,0);
@@ -181,6 +200,7 @@ void loop() {
       digitalWrite(BlueLED, LOW); //CHANGE
       digitalWrite(DCmotor, LOW); //turn off fan motor //CHANGE
       lcd.clear();
+      state_trans(); //run state transition code
     } else if(DHT.temperature <= tempThresh) { //if temp drops to normal, switch to idle
       state = 1;
       digitalWrite(GreenLED, HIGH); //switch to "IDLE" lights //CHANGE
@@ -189,6 +209,7 @@ void loop() {
       lcd.clear();
       lcd.setCursor(12,0);
       lcd.print("IDLE"); //print idle to top right corner of lcd
+      state_trans(); //run state transition code
     } else if(water_Level() < 100) { //if water level drops too low, switch to error
       state = 2;
       digitalWrite(BlueLED, LOW); //CHANGE
@@ -197,6 +218,7 @@ void loop() {
       lcd.clear();
       lcd.setCursor(11,0);
       lcd.print("ERROR"); //print "ERROR" to top right corner of lcd
+      state_trans(); //run state transition code
     } else { //"RUNNING" state
       digitalWrite(BlueLED, HIGH); //CHANGE
       digitalWrite(DCmotor, HIGH); //CHANGE
@@ -216,9 +238,29 @@ void pin_ISR() { //INTERRUPT for "START" button
     state = 1;
     digitalWrite(YellowLED, LOW); //turn off diabled light //CHANGE
     lcd.clear(); //reset lcd
+    state_trans(); //run state transition function
   }
 }
 
 int water_Level() { //function to read water level sensor. Increases simplicity for coding
   return analogRead(water); //CHANGE
+}
+
+int state_trans() {
+  int chk = DHT.read11(DHT11_PIN);
+  DateTime now = rtc.now();
+  sprintf(t, "%02d:%02d:%02d", now.hour(), now.minute(), now.second());
+  Serial.print(F("Date/Time: ")); //prints "Date/Time: " to serial monitor 
+  lcd.setCursor(0,0);
+  lcd.write(t); //prints time to top left corner of lcd screen
+  Serial.println(t);
+  if(state == 0) {
+    Serial.println("STATE: DISABLED");
+  } else if(state == 1) {
+    Serial.println("STATE: IDLE");
+  } else if(state == 2) {
+    Serial.println("STATE: RESET");
+  } else if(state == 3) {
+    Serial.println("STATE: RUNNING"):
+      }
 }
