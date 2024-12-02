@@ -12,26 +12,27 @@ dht DHT; //Humidity/Temp Sensor
 
 RTC_DS3231 rtc; //Real Time Clock Module
 
+volatile unsigned char* port_a = (unsigned char*) 0x22; 
+volatile unsigned char* ddr_a = (unsigned char*) 0x21;
+volatile unsigned char* pin_a = (unsigned char*) 0x20;
+volatile unsigned char* port_b = (unsigned char*) 0x25; 
+volatile unsigned char* ddr_b = (unsigned char*) 0x24;
+volatile unsigned char* port_d = (unsigned char*) 0x2B; 
+volatile unsigned char* ddr_d = (unsigned char*) 0x2A;
+volatile unsigned char* pin_d = (unsigned char*) 0x29;
+volatile unsigned char* port_e = (unsigned char*) 0x2E; 
+volatile unsigned char* ddr_e = (unsigned char*) 0x2D;
+volatile unsigned char* pin_e = (unsigned char*) 0x2C;
+volatile unsigned char* port_h = (unsigned char*) 0x102; 
+volatile unsigned char* ddr_h = (unsigned char*) 0x101;
+
 //Operation variables
 unsigned long count;
 int state = 2;
 //UI controls
-const int Start = 19; //CHANGE
-const int Stop = 22; //CHANGE
-const int Reset = 23; //CHANGE
-const int RedLED = 2; //CHANGE
-const int YellowLED = 9;  //CHANGE
-const int GreenLED = 24; //CHANGE
-const int BlueLED = 25; //CHANGE
-int ventButton = 18; //CHANGE
+const int Start = 19;
 //Temperature Sensor
 int tempThresh = 27;
-//Water Level Sensor
-int water = 3; //CHANGE
-//DC motor
-int DCmotor = 29; //CHANGE
-int in1 = 12; //CHANGE
-int in2 = 13; //CHANGE
 //Stepper motor driver
 int pin1 = 14; //CHANGE
 int pin2 = 15; //CHANGE
@@ -43,7 +44,7 @@ int begin = 0;
 //RTC
 char t[32];
 //LCD Screen
-const int RS = 11, EN = 10, D4 = 7, D5 = 6, D6 = 5, D7 = 4; //CHANGE
+const int RS = 11, EN = 10, D4 = 7, D5 = 6, D6 = 5, D7 = 4;
 
 LiquidCrystal lcd(RS, EN, D4, D5, D6, D7);
 
@@ -58,16 +59,19 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(Start), pin_ISR, RISING); //Setting inturrupt for Start button 
 
   //Pinmodes for all components
-  pinMode(Stop, INPUT); //CHANGE
-  pinMode(Reset, INPUT); //CHANGE
-  pinMode(RedLED, OUTPUT); //CHANGE
-  pinMode(YellowLED, OUTPUT); //CHANGE
-  pinMode(GreenLED, OUTPUT); //CHANGE
-  pinMode(BlueLED, OUTPUT); //CHANGE
-  pinMode(water, INPUT); //CHANGE
-  pinMode(DCmotor, OUTPUT); //CHANGE
-  pinMode(in1, OUTPUT); //CHANGE
-  pinMode(in2, OUTPUT); //CHANGE
+  *ddr_a &= 0xFE; //Sets 22 PA0 to input for Stop Button
+  *port_a |= 0x01;
+  *ddr_a &= 0xFD; //Sets 23 PA1 to input for Reset Button
+  *port_a |= 0x2;
+  *ddr_e |= 0x10;  //Sets 2 PE4 to output for Red LED
+  *ddr_h |= 0x40; //Sets 9 PH6 to output for Yellow LED
+  *ddr_a |= 0x04;  //Sets 24 PA2 to output for Green LED
+  *ddr_a |= 0x08;  //Sets 25 PA3 to output for Blue LED
+  *ddr_e &= 0xDF; //Sets 3 PE5 to input for water sensor
+  *port_e |= 0x20;
+  *ddr_a |= 0x80;  //Sets 29 PA7 to output for DC motor control
+  *ddr_b |= 0x40;  //Sets 12 PB6 to output for DC motor input 1
+  *ddr_b |= 0x80;  //Sets 13 PB7 to output for DC motor input 2
 
   count = millis(); //inital count value
 
