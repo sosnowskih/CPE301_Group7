@@ -1,4 +1,4 @@
-//Clauson, John; Sosnowski, Henryk; 
+//Clauson, John; Sosnowski, Henryk; Carlon, Jordin
 // CPE301 Final Project
 
 #include <dht.h>
@@ -12,6 +12,7 @@ dht DHT; //Humidity/Temp Sensor
 
 RTC_DS3231 rtc; //Real Time Clock Module
 
+//define RDA and TBE to check for received data and if buffer is empty
 #define RDA 0x80
 #define TBE 0x20
 
@@ -37,6 +38,11 @@ volatile unsigned char* pin_e = (unsigned char*) 0x2C;
 volatile unsigned char* port_h = (unsigned char*) 0x102; 
 volatile unsigned char* ddr_h = (unsigned char*) 0x101;
 
+//unsigned variables for ADC
+volatile unsigned char* my_ADMUX = (unsigned char*) 0x7C;
+volatile unsigned char* my_ADCSRB = (unsigned char*) 0x7B;
+volatile unsigned char* my_ADCSRA = (unsigned char*) 0x7A;
+volatile unsigned int* my_ADC_DATA = (unsigned int*) 0x78;
 
 //Operation variables
 int water = 3;
@@ -256,7 +262,12 @@ void pin_ISR() { //INTERRUPT for "START" button
 }
 
 int water_Level() { //function to read water level sensor. Increases simplicity for coding
-  return analogRead(water); //CHANGE
+    //adc_value set to reading from port 
+  unsigned int adc_value = adc_read(0);//check for correct analog port
+  //send high and low bit of UART
+  U0putchar((adc_value >> 8) & 0xFF);
+  U0putchar(adc_value & 0xFF);
+  //make sure return is not needed
 }
 
 int state_trans() {
@@ -325,4 +336,58 @@ void U0putchar(unsigned char U0pdata)
 {
   while((*myUCSR0A & TBE) == 0);
     *myUDR0 = U0pdata;
+}
+
+//These functions setup ADC and get data from UART
+//setup ADC
+void adc_init()
+{
+  // setup the A register
+  *my_ADCSRA |= 0b10000000; // set bit   7 to 1 to enable the ADC
+  *my_ADCSRA &= 0b11011111; // clear bit 6 to 0 to disable the ADC trigger mode
+  *my_ADCSRA &= 0b11110111; // clear bit 5 to 0 to disable the ADC interrupt
+  *my_ADCSRA &= 0b11111000; // clear bit 0-2 to 0 to set prescaler selection to slow reading
+  // setup the B register
+  *my_ADCSRB &= 0b11110111; // clear bit 3 to 0 to reset the channel and gain bits
+  *my_ADCSRB &= 0b11111000; // clear bit 2-0 to 0 to set free running mode
+  // setup the MUX Register
+  *my_ADMUX  &= 0b01111111; // clear bit 7 to 0 for AVCC analog reference
+  *my_ADMUX  |= 0b01000000; // set bit   6 to 1 for AVCC analog reference
+  *my_ADMUX  &= 0b11011111; // clear bit 5 to 0 for right adjust result
+  *my_ADMUX  &= 0b11100000; // clear bit 4-0 to 0 to reset the channel and gain bits
+}
+//read ADC channel
+unsigned int adc_read(unsigned char adc_channel_num)
+{
+  // clear the channel selection bits (MUX 4:0)
+  *my_ADMUX  &= 0b11100000;
+  // clear the channel selection bits (MUX 5)
+  *my_ADCSRB &= 0b11110111;
+  // set the channel number
+  if(adc_channel_num > 7)
+  {
+    // set the channel selection bits, but remove the most significant bit (bit 3)
+    adc_channel_num -= 8;
+    // set MUX bit 5
+    *my_ADCSRB |= 0b00001000;
+  }
+  // set the channel selection bits
+  *my_ADMUX  += adc_channel_num;
+  // set bit 6 of ADCSRA to 1 to start a conversion
+  *my_ADCSRA |= 0x40;
+  // wait for the conversion to complete
+  while((*my_ADCSRA & 0x40) != 0);
+  // return the result in the ADC data register
+  return *my_ADC_DATA;
+}
+
+//check for data
+unsigned char U0kbhit()
+{
+  return *myUCSR0A & RDA;
+}
+//get data from the UART
+unsigned char U0getchar()
+{
+  return *myUDR0;
 }
