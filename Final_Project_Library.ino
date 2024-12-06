@@ -268,8 +268,6 @@ int water_Level() { //function to read water level sensor. Increases simplicity 
   //send high and low bit of UART
   U0putchar((adc_value >> 8) & 0xFF);
   U0putchar(adc_value & 0xFF);
-  //put in function that prints Water level:?%
-  //actually that should go in loop
   //also check to make sure that no math needs to be done to analog signal to get correct measurement
   //make sure return is not needed
   //put this in loop
