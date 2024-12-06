@@ -264,13 +264,16 @@ void pin_ISR() { //INTERRUPT for "START" button
 int water_Level() { //function to read water level sensor. Increases simplicity for coding
     //adc_value set to reading from port 
   unsigned int adc_value = adc_read(0);//check for correct analog port
+ //tell other members we need to change the pin for the water sensor as ADC requires analog port input 
   //send high and low bit of UART
   U0putchar((adc_value >> 8) & 0xFF);
   U0putchar(adc_value & 0xFF);
   //put in function that prints Water level:?%
+  //actually that should go in loop
   //also check to make sure that no math needs to be done to analog signal to get correct measurement
   //make sure return is not needed
-  //tell other memebrs we need to change the pin for the water sensor as ADC requires analog port input
+  //put this in loop
+  
 }
 
 int state_trans() {
