@@ -270,6 +270,7 @@ int water_Level() { //function to read water level sensor. Increases simplicity 
   //put in function that prints Water level:?%
   //also check to make sure that no math needs to be done to analog signal to get correct measurement
   //make sure return is not needed
+  //tell other memebrs we need to change the pin for the water sensor as ADC requires analog port input
 }
 
 int state_trans() {
