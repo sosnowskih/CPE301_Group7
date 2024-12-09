@@ -48,6 +48,7 @@ volatile unsigned int* my_ADC_DATA = (unsigned int*) 0x78;
 int water = 3;
 unsigned long count;
 int state = 2;
+int printed = 0; //For serial printing
 //UI controls
 const int Start = 19;
 //Temperature Sensor
@@ -73,7 +74,6 @@ Stepper myStepper = Stepper(stepsPerRevolution, pin1, pin3, pin2, pin4);
 
 void setup() {
   U0init(9600);
-  Serial.begin(9600); //Serial Monitor Setup  //CHANGE
   Serialstring("Serial Monitor Ready");
   U0putchar('\n');
 
@@ -90,9 +90,8 @@ void setup() {
   *ddr_h |= 0x40; //Sets 9 PH6 to output for Yellow LED
   *ddr_a |= 0x04;  //Sets 24 PA2 to output for Green LED
   *ddr_a |= 0x08;  //Sets 25 PA3 to output for Blue LED
-  *ddr_e &= 0xDF; //Sets 3 PE5 to input for water sensor
   *port_e |= 0x20;
-  *ddr_a |= 0x80;  //Sets 29 PA7 to output for DC motor control
+  *ddr_a |= 0x80;  //Sets 29 PA7 to output for DC motor enable
   *ddr_b |= 0x40;  //Sets 12 PB6 to output for DC motor input 1
   *ddr_b |= 0x80;  //Sets 13 PB7 to output for DC motor input 2
 
@@ -117,6 +116,7 @@ void setup() {
   Serialstring("\n");
 
   lcd.begin(16,2); //LCD columns and rows
+  adc_init();  //Start the ADC
 }
 
 void loop() {
@@ -150,10 +150,20 @@ void loop() {
     if(tracker == 0) {
       int chk = DHT.read11(DHT11_PIN);
       DateTime now = rtc.now();
-      sprintf(t, "%02d:%02d:%02d", now.hour(), now.minute(), now.second());
-      Serial.print(F("Date/Time: ")); //prints "Date/Time: " to serial monitor 
-      Serial.println(t);
-      Serial.println("VENT CHANGE");
+      Serialstring("Date/Time: "); //prints "Date/Time: " to serial monitor 
+      Serialint(now.month());
+      Serialstring("/");
+      Serialint(now.day());
+      Serialstring("/");
+      Serialint(now.year());
+      Serialstring(" ");
+      Serialint(now.hour());
+      Serialstring(":");
+      Serialint(now.minute());
+      Serialstring(":");
+      Serialint(now.second());
+      Serialstring(" ");
+      Serialstring("VENT CHANGE\n");
       tracker++;
     }
   } else {
@@ -165,47 +175,54 @@ void loop() {
    if(begin == 1) {
     lcd.setCursor(4,0); //reset lcd
     lcd.print("        ");
-    state_trans();
     begin = 0;
   }
   
   if(state == 1) { //IDLE STATE
+    if(printed == 0){
+      state_trans(); //run state transition code
+      printed = 1;
+    }
     *port_a |= 0x04; //green LED high
     lcd.setCursor(12,0);
     lcd.print("IDLE"); //prints "IDLE" to top right corner of lcd screen
     if((DHT.temperature > tempThresh)) { //if the temp is too high, switch to running
       state = 3;
+      printed = 0;
       *port_a &= 0xFB; //green LED low
       *port_a |= 0x08; //blue LED high //adjust to running lights
       lcd.clear();
       lcd.setCursor(9,0);
       lcd.print("RUNNING"); //print state to lcd screen
-      state_trans(); //run state transition code
-    } else if(water_Level() < 100) { //if the water is too low, throw an error
+    } else if(adc_read(0) < 100) { //if the water is too low, throw an error
       state = 2;
+      printed = 0;
       *port_a &= 0xFB; //green LED low
       *port_e |= 0x10; // red LED high //adjust to error lights
       lcd.clear();
       lcd.setCursor(11,0);
       lcd.print("ERROR"); //print state to lcd screen
-      state_trans(); //run state transition code
     } else if(*pin_a & 0x01) { //if "stop" is pressed, disable system
       state = 0;
+      printed = 0;
       *port_a &= 0xFB; //green LED low
       *port_h |= 0x40; //yellow LED high //adjust to "stop" lights
       lcd.clear();
-      state_trans(); //run state transition code
     }
 
   } else if(state == 2) { //ERROR STATE
+    if(printed == 0){
+      state_trans(); //run state transition code
+      printed = 1;
+    }
     if(*pin_a & 0x02) { //switch to idle if "reset" is pressed
       state = 1;
+      printed = 0;
       *port_e &= 0xEF; // red LED low
-      *port_a |= 0x04;//green LED high //change lights to idle state 
+      *port_a |= 0x04; //green LED high //change lights to idle state 
       lcd.clear();
       lcd.setCursor(12,0);
       lcd.print("IDLE"); //print "IDLE" to top right corner of lcd
-      state_trans(); //run state transition code
     } else { //otherwise, run error as normal
       *port_e |= 0x10; // red LED high
       lcd.setCursor(11,0);
@@ -213,39 +230,49 @@ void loop() {
     }
 
   } else if(state == 3) { //RUNNING STATE
+    if(printed == 0){
+      state_trans(); //run state transition code
+      printed = 1;
+    }
+    *port_b |= 0x40; //set DC motor direction
+    *port_b &= 0x7F; //set DC motor direction
     if(*pin_a & 0x01) { //disable if "stop" is pressed
       state = 0;
+      printed = 0;
       *port_h |= 0x40; //yellow LED high //switch to stop lights
       *port_a &= 0xF7; //blue LED low
-      *port_a &= 0x7F; //DC motor low //turn off fan motor
+      *port_a &= 0x7F; //DC motor disable //turn off fan motor
       lcd.clear();
-      state_trans(); //run state transition code
     } else if(DHT.temperature <= tempThresh) { //if temp drops to normal, switch to idle
       state = 1;
+      printed = 0;
       *port_a |= 0x04; //green LED high //switch to "IDLE" lights
       *port_a &= 0xF7; //blue LED low
-      *port_a &= 0x7F; //DC motor low //turn off fan motor
+      *port_a &= 0x7F; //DC motor disable //turn off fan motor
       lcd.clear();
       lcd.setCursor(12,0);
       lcd.print("IDLE"); //print idle to top right corner of lcd
-      state_trans(); //run state transition code
-    } else if(water_Level() < 100) { //if water level drops too low, switch to error
+    } else if(adc_read(0) < 100) { //if water level drops too low, switch to error
       state = 2;
+      printed = 0;
       *port_a &= 0xF7; //blue LED low
       *port_e |= 0x10; // red LED high //switch to error lights
-      *port_a &= 0x7F; //DC motor low //turn off fan motor
+      *port_a &= 0x7F; //DC motor disable //turn off fan motor
       lcd.clear();
       lcd.setCursor(11,0);
       lcd.print("ERROR"); //print "ERROR" to top right corner of lcd
-      state_trans(); //run state transition code
     } else { //"RUNNING" state
       *port_a |= 0x08; //blue LED high
-      *port_a |= 0x80; //DC motor high
+      *port_a |= 0x80; //DC motor enable
       lcd.setCursor(9,0);
       lcd.print("RUNNING"); //print "RUNNING" to top right corner of lcd
     }
 
-  } else if(state == 0) { //DISABLED STARE
+  } else if(state == 0) { //DISABLED STATE
+    if(printed == 0){
+      state_trans(); //run state transition code
+      printed = 1;
+    }
     *port_h |= 0x40; //yellow LED high //yellow light is on for diabled
     lcd.setCursor(4,0);
     lcd.print("DISABLED"); // only print "DISABLED" on center of lcd
@@ -258,42 +285,38 @@ void pin_ISR() { //INTERRUPT for "START" button
     *port_h &= 0xBF; //yellow LEF low //turn off diabled light
     *port_a |= 0x04; //green LED high //turn on IDLE light
     begin = 1;
+    printed = 0;
   }
-}
-
-int water_Level() { //function to read water level sensor. Increases simplicity for coding
-    //adc_value set to reading from port 
-  unsigned int adc_value = adc_read(0);//check for correct analog port
- //tell other members we need to change the pin for the water sensor as ADC requires analog port input 
-  //send high and low bit of UART
-  U0putchar((adc_value >> 8) & 0xFF);
-  U0putchar(adc_value & 0xFF);
-  //also check to make sure that no math needs to be done to analog signal to get correct measurement
-  //make sure return is not needed
-  //put this in loop
-  
 }
 
 int state_trans() {
   int chk = DHT.read11(DHT11_PIN);
   DateTime now = rtc.now();
-  sprintf(t, "%02d:%02d:%02d", now.hour(), now.minute(), now.second());
-  Serial.print(F("Date/Time: ")); //prints "Date/Time: " to serial monitor
-  Serial.print(t);
-  Serial.print(" ");
+  while(now.day()<1 || now.day()>31){
+    now = rtc.now();
+  }
+  Serialstring("Date/Time: "); //prints "Date/Time: " to serial monitor 
+  Serialint(now.month());
+  Serialstring("/");
+  Serialint(now.day());
+  Serialstring("/");
+  Serialint(now.year());
+  Serialstring(" ");
+  Serialint(now.hour());
+  Serialstring(":");
+  Serialint(now.minute());
+  Serialstring(":");
+  Serialint(now.second());
+  Serialstring(" ");
   if(state == 0) { //Prints correct state to serial monitor
-    Serial.println("STATE: DISABLED");
-    Serial.println("");
+    Serialstring("STATE: DISABLED\n");
   } else if(state == 1) {
-    Serial.println("STATE: IDLE");
-    Serial.println("");
+    Serialstring("STATE: IDLE\n");
   } else if(state == 2) {
-    Serial.println("STATE: ERROR");
-    Serial.println("");
+    Serialstring("STATE: ERROR\n");
   } else if(state == 3) {
-    Serial.println("STATE: RUNNING");
-    Serial.println("");
-      }
+    Serialstring("STATE: RUNNING\n");
+    }
 }
 
 //initializes the serial monitor
@@ -308,7 +331,7 @@ void U0init(int U0baud)
  *myUBRR0  = tbaud;
 }
 
-//prints an int between 1 to 5 digits long to the serial monitor 
+//prints an int between 1 to 4 digits long to the serial monitor 
 void Serialint(int input){
   int length = 1;
   int inputl = input;
@@ -347,7 +370,7 @@ void U0putchar(unsigned char U0pdata)
 void adc_init()
 {
   // setup the A register
-  *my_ADCSRA |= 0b10000000; // set bit   7 to 1 to enable the ADC
+  *my_ADCSRA |= 0b10000000; // set bit 7 to 1 to enable the ADC
   *my_ADCSRA &= 0b11011111; // clear bit 6 to 0 to disable the ADC trigger mode
   *my_ADCSRA &= 0b11110111; // clear bit 5 to 0 to disable the ADC interrupt
   *my_ADCSRA &= 0b11111000; // clear bit 0-2 to 0 to set prescaler selection to slow reading
